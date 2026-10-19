@@ -1,18 +1,19 @@
 #!/usr/bin/env python3
-"""Legge l'uso del piano Claude (finestra 5 ore + settimanale) e lo pubblica
-in un gist segreto come una riga CSV che il watch face scarica:
+"""Reads your Claude plan usage (5-hour window + weekly limit) and publishes
+it to a secret gist as a few lines of CSV that the watch face downloads:
 
     s,sr,w,wr,t
-    s/w   = percentuale usata (5 ore / settimanale)
-    sr/wr = reset in epoch UTC (0 se non c'è una finestra attiva)
-    t     = istante della lettura
+    s/w   = percent used (5-hour / weekly)
+    sr/wr = reset as UTC epoch (0 if no window is active)
+    t     = when the usage was read
 
-Il token OAuth viene preso dal portachiavi macOS ("Claude Code-credentials"),
-lo stesso che usa la CLI `claude` dopo `claude auth login`. Il token non
-lascia mai il Mac: nel gist finiscono solo le percentuali.
+The OAuth token comes from the macOS keychain ("Claude Code-credentials") or
+~/.claude/.credentials.json: the same one the `claude` CLI uses after
+`claude auth login`. The token never leaves this computer: the gist only gets
+the percentages.
 
-Uso:  claude_usage_relay.py <gist_id>        (pubblica)
-      claude_usage_relay.py --print          (solo stampa, per test)
+Usage:  claude_usage_relay.py <gist_id>        (publish)
+        claude_usage_relay.py --print          (print only, for testing)
 """
 import datetime as dt
 import json
@@ -37,7 +38,7 @@ CRED_FILE = os.path.expanduser("~/.claude/.credentials.json")
 
 
 def use_file():
-    # Linux (e macOS senza portachiavi): la CLI salva le credenziali in un file.
+    # Linux (and macOS without a keychain entry): the CLI stores credentials in a file.
     return sys.platform != "darwin" or (os.path.exists(CRED_FILE) and not _keychain_has())
 
 
@@ -65,7 +66,7 @@ def keychain_account():
     for line in out.splitlines():
         if '"acct"' in line and "=" in line:
             return line.split("=", 1)[1].strip().strip('"')
-    raise RuntimeError("account del portachiavi non trovato")
+    raise RuntimeError("keychain account not found")
 
 
 def keychain_write(creds):
@@ -82,8 +83,8 @@ def keychain_write(creds):
 
 
 def refresh(creds):
-    """Rinnova il token e lo salva di nuovo nel portachiavi, così la CLI
-    continua a funzionare con il refresh token ruotato."""
+    """Refreshes the token and saves it back to the keychain, so the CLI keeps
+    working with the rotated refresh token."""
     oauth = creds["claudeAiOauth"]
     body = json.dumps({
         "grant_type": "refresh_token",
@@ -137,7 +138,7 @@ def epoch(iso):
     if not iso:
         return 0
     ts = dt.datetime.fromisoformat(iso.replace("Z", "+00:00")).timestamp()
-    # L'API restituisce es. 15:59:59.9: arrotonda al minuto.
+    # The API returns e.g. 15:59:59.9: round to the minute.
     return int(round(ts / 60) * 60)
 
 
@@ -155,7 +156,7 @@ WIDGET_FILE = "widget.txt"
 
 
 def record_history(usage):
-    """Tiene una riga per lettura: serve al widget per il grafico giornaliero."""
+    """Keeps one row per reading: the widget uses it for the daily chart."""
     w = usage.get("seven_day") or {}
     row = {"t": int(time.time()), "w": w.get("utilization") or 0, "wr": epoch(w.get("resets_at"))}
     os.makedirs(os.path.dirname(HISTORY), exist_ok=True)
@@ -182,8 +183,8 @@ def load_history(days=8):
 
 
 def daily_usage(rows, days=7):
-    """Punti percentuali di uso settimanale consumati in ciascuno degli ultimi
-    `days` giorni (ora locale), dal più vecchio a oggi. Gestisce i reset."""
+    """Weekly-usage percentage points spent on each of the last `days` days
+    (local time), oldest first. Handles resets."""
     today = dt.date.today()
     out = {today - dt.timedelta(days=i): 0.0 for i in range(days)}
     prev = None
@@ -204,6 +205,13 @@ def widget_text(usage, rows):
     lines.append("B,%d,%d,%d,%d" % (pct.get("claude_code", 0), pct.get("chat", 0),
                                     pct.get("cowork", 0), pct.get("other", 0)))
     lines.append("H," + ",".join(str(v) for v in daily_usage(rows)))
+    # Dollar-based allowance (the cloud credit), when the account has one:
+    # D,used_cents,limit_cents,reset_epoch
+    for key, win in usage.items():
+        if isinstance(win, dict) and win.get("limit_dollars"):
+            lines.append("D,%d,%d,%d" % (round((win.get("used_dollars") or 0) * 100),
+                                         round(win["limit_dollars"] * 100), epoch(win.get("resets_at"))))
+            break
     try:
         sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
         import token_coach
@@ -215,8 +223,8 @@ def widget_text(usage, rows):
             lines.append("X," + last["tip"].replace("\n", " ")[:60])
         for tip in summ["tips"][:4]:
             lines.append("T," + tip["short"].replace("\n", " ")[:44])
-    except Exception as e:  # il widget deve funzionare anche senza consigli
-        lines.append("T,coach non disponibile")
+    except Exception as e:  # the widget must work even without tips
+        lines.append("T,coach unavailable")
         print("token_coach:", e, file=sys.stderr)
     return "\n".join(lines)
 

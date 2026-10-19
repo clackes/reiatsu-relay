@@ -7,8 +7,6 @@ set -euo pipefail
 
 DIR="$HOME/.local/share/reiatsu-relay"
 HERE="$(cd "$(dirname "$0")" && pwd)"
-# Language of the short tips shown on the watch: it or en.
-TIPS_LANG="${CLAUDE_FACE_LANG:-$( [[ "${LANG:-}" == it* ]] && echo it || echo en )}"
 
 need() { command -v "$1" >/dev/null || { echo "Missing '$1': $2"; exit 1; }; }
 need python3 "install Python 3"
@@ -32,7 +30,7 @@ else
   GIST="${URL##*/}"
   echo "$GIST" > "$DIR/gist_id"
 fi
-CLAUDE_FACE_LANG="$TIPS_LANG" python3 "$DIR/claude_usage_relay.py" "$GIST"
+python3 "$DIR/claude_usage_relay.py" "$GIST"
 USER_GH=$(gh api user -q .login)
 RAW="https://gist.githubusercontent.com/$USER_GH/$GIST/raw"
 
@@ -48,7 +46,6 @@ if [ "$(uname)" = "Darwin" ]; then
   </array>
   <key>EnvironmentVariables</key><dict>
     <key>PATH</key><string>$(dirname "$(command -v gh)"):/usr/bin:/bin</string>
-    <key>CLAUDE_FACE_LANG</key><string>$TIPS_LANG</string>
   </dict>
   <key>StartInterval</key><integer>300</integer>
   <key>RunAtLoad</key><true/>
@@ -60,7 +57,7 @@ EOF
   launchctl bootstrap "gui/$(id -u)" "$PLIST"
 else
   # Linux: cron every 5 minutes.
-  ( crontab -l 2>/dev/null | grep -v claude_usage_relay.py; echo "*/5 * * * * CLAUDE_FACE_LANG=$TIPS_LANG python3 $DIR/claude_usage_relay.py $GIST >> /tmp/reiatsu-relay.log 2>&1" ) | crontab -
+  ( crontab -l 2>/dev/null | grep -v claude_usage_relay.py; echo "*/5 * * * * python3 $DIR/claude_usage_relay.py $GIST >> /tmp/reiatsu-relay.log 2>&1" ) | crontab -
 fi
 
 cat <<EOF

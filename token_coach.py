@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Analizza le sessioni locali di Claude Code (~/.claude/projects/*/*.jsonl)
-e produce consigli brevi per non sprecare l'uso del piano.
+"""Analyzes local Claude Code sessions (~/.claude/projects/*/*.jsonl) and
+produces short tips for not wasting your plan usage.
 
-Uso:  token_coach.py            (report leggibile)
-      token_coach.py --json     (dati per relay / widget)
+Usage:  token_coach.py            (readable report)
+        token_coach.py --json     (data for the relay / widget)
 """
 import glob
 import json
@@ -13,12 +13,6 @@ import time
 from datetime import datetime
 
 PROJECTS = os.path.expanduser("~/.claude/projects")
-# Lingua dei consigli brevi mostrati sull'orologio: "it" o "en".
-LANG = os.environ.get("CLAUDE_FACE_LANG", "it")
-
-
-def L(it, en):
-    return en if LANG == "en" else it
 DAYS = 7
 
 
@@ -89,7 +83,7 @@ def analyze_session(path):
                 s["fresh_input"] += u.get("input_tokens") or 0
                 m = msg.get("model") or "?"
                 s["models"][m] = s["models"].get(m, 0) + 1
-    # "Peso" approssimativo: ogni chiamata rilegge tutto il contesto.
+    # Rough "weight": every call re-reads the whole context.
     s["weight"] = s["cache_read"] + s["cache_write"] + s["fresh_input"] + 5 * s["output"]
     return s
 
@@ -112,7 +106,7 @@ def k(n):
 
 
 def tips(ss):
-    """Ritorna una lista di (priorità, testo corto per l'orologio, testo lungo)."""
+    """Returns a list of (priority, short text for the watch, long text)."""
     t = []
     if not ss:
         return t
@@ -120,50 +114,50 @@ def tips(ss):
     total_w = sum(s["weight"] for s in ss) or 1
 
     if last["peak_ctx"] > 150_000:
-        t.append((10, L(f"Ultima sessione {k(last['peak_ctx'])} ctx: /clear", f"Last session {k(last['peak_ctx'])} ctx: /clear"),
-                  f"La tua ultima sessione ({last['project']}) è arrivata a {k(last['peak_ctx'])} token di contesto. "
-                  "Ogni messaggio rilegge tutto il contesto: oltre 100k ogni domanda costa 5-10 volte di più. "
-                  "Usa /clear quando passi a un task diverso, o /compact se devi continuare."))
+        t.append((10, f"Last session {k(last['peak_ctx'])} ctx: /clear",
+                  f"Your last session ({last['project']}) reached {k(last['peak_ctx'])} tokens of context. "
+                  "Every message re-reads the whole context: above 100k each question costs 5-10x more. "
+                  "Use /clear when you switch to a different task, or /compact if you need to keep going."))
     elif last["peak_ctx"] > 100_000:
-        t.append((6, L(f"Ultima sessione {k(last['peak_ctx'])}: valuta /compact", f"Last session {k(last['peak_ctx'])}: try /compact"),
-                  f"L'ultima sessione è a {k(last['peak_ctx'])} di contesto. Un /compact ora la alleggerisce."))
+        t.append((6, f"Last session {k(last['peak_ctx'])}: try /compact",
+                  f"Your last session is at {k(last['peak_ctx'])} of context. A /compact now makes it lighter."))
 
     huge = [s for s in ss if s["peak_ctx"] > 150_000]
     if len(huge) >= 3:
-        t.append((8, L(f"{len(huge)} sessioni >150k questa sett.", f"{len(huge)} sessions >150k this week"),
-                  f"{len(huge)} sessioni su {len(ss)} questa settimana hanno superato i 150k di contesto. "
-                  "Sessioni lunghe consumano molto più di tante sessioni corte: una sessione per task."))
+        t.append((8, f"{len(huge)} sessions >150k this week",
+                  f"{len(huge)} of {len(ss)} sessions this week went past 150k of context. "
+                  "Long sessions use far more than many short ones: one session per task."))
 
     heavy = max(ss, key=lambda s: s["weight"])
     share = heavy["weight"] / total_w
     if share > 0.3 and len(ss) > 2:
-        t.append((7, L(f"{heavy['project']}: {share:.0%} dell'uso", f"{heavy['project']}: {share:.0%} of usage"),
-                  f"Da sola la sessione su '{heavy['project']}' vale circa il {share:.0%} dell'uso della settimana "
-                  f"({heavy['calls']} chiamate, picco {k(heavy['peak_ctx'])})."))
+        t.append((7, f"{heavy['project']}: {share:.0%} of usage",
+                  f"The session on '{heavy['project']}' alone is about {share:.0%} of this week's usage "
+                  f"({heavy['calls']} calls, peak {k(heavy['peak_ctx'])})."))
 
     big = sum(s["big_results"] for s in ss)
     if big >= 5:
-        t.append((5, L(f"{big} output enormi: limita i log", f"{big} huge outputs: trim the logs"),
-                  f"{big} risultati di tool sopra ~10k token (log, file interi, dump). "
-                  "Chiedi di leggere solo le righe utili (grep, head) invece di file o log completi."))
+        t.append((5, f"{big} huge outputs: trim the logs",
+                  f"{big} tool results above ~10k tokens (logs, whole files, dumps). "
+                  "Ask to read only the lines you need (grep, head) instead of full files or logs."))
 
     sub = sum(s["subagent_calls"] for s in ss)
     calls = sum(s["calls"] for s in ss) or 1
     if sub / calls > 0.35:
-        t.append((5, L(f"Subagent {sub / calls:.0%} delle chiamate", f"Subagents: {sub / calls:.0%} of calls"),
-                  f"Il {sub / calls:.0%} delle chiamate viene da subagent/workflow. Ognuno riparte da zero: "
-                  "usali solo per ricerche davvero ampie."))
+        t.append((5, f"Subagents: {sub / calls:.0%} of calls",
+                  f"{sub / calls:.0%} of calls come from subagents/workflows. Each one starts from scratch: "
+                  "use them only for really broad searches."))
 
     opus = sum(n for s in ss for m, n in s["models"].items() if "opus" in m or "fable" in m)
     if opus / calls > 0.8 and calls > 200:
-        t.append((4, L("Task semplici? prova Sonnet", "Simple task? Try Sonnet"),
-                  "Quasi tutto gira sul modello più grande. Per modifiche piccole e domande veloci "
-                  "Sonnet o Haiku consumano molto meno del limite settimanale."))
+        t.append((4, "Simple task? Try Sonnet",
+                  "Almost everything runs on the largest model. For small edits and quick questions "
+                  "Sonnet or Haiku use much less of the weekly limit."))
 
     long_ = [s for s in ss if s["prompts"] > 60]
     if long_:
-        t.append((3, L(f"{len(long_)} sessioni con >60 richieste", f"{len(long_)} sessions with >60 prompts"),
-                  "Sessioni con decine di richieste accumulano contesto: apri una sessione nuova per ogni argomento."))
+        t.append((3, f"{len(long_)} sessions with >60 prompts",
+                  "Sessions with dozens of prompts pile up context: start a new session for each topic."))
     t.sort(key=lambda x: -x[0])
     return t
 
@@ -173,26 +167,26 @@ def session_title(s):
 
 
 def session_tip(s):
-    """Il consiglio più utile per una singola sessione: (corto, lungo)."""
+    """The most useful tip for a single session: (short, long)."""
     sub_share = s["subagent_calls"] / max(1, s["calls"])
     if s["peak_ctx"] > 150_000:
-        return (L(f"Contesto a {k(s['peak_ctx'])}: fai /clear prima del prossimo task", f"Context at {k(s['peak_ctx'])}: /clear before the next task"),
-                f"Questa sessione è arrivata a {k(s['peak_ctx'])} di contesto: ogni nuova richiesta lo rilegge tutto. "
-                "Se cambi argomento usa /clear, se continui lo stesso lavoro usa /compact.")
+        return (f"Context at {k(s['peak_ctx'])}: /clear before the next task",
+                f"This session reached {k(s['peak_ctx'])} of context: every new prompt re-reads all of it. "
+                "If you change topic use /clear, if you continue the same work use /compact.")
     if s["big_results"] >= 3:
-        return (L(f"{s['big_results']} output enormi: chiedi solo le righe utili", f"{s['big_results']} huge outputs: ask only for the lines you need"),
-                f"{s['big_results']} risultati di tool molto grandi (log o file interi). Chiedi grep/head mirati.")
+        return (f"{s['big_results']} huge outputs: ask only for the lines you need",
+                f"{s['big_results']} very large tool results (logs or whole files). Ask for targeted grep/head.")
     if sub_share > 0.4:
-        return (L(f"Subagent {sub_share:.0%} delle chiamate: usali meno", f"Subagents {sub_share:.0%} of calls: use fewer"),
-                "Molte chiamate vengono da subagent: ognuno ricomincia da zero e costa.")
+        return (f"Subagents {sub_share:.0%} of calls: use fewer",
+                "Many calls come from subagents: each one starts from zero and costs.")
     if s["prompts"] > 40:
-        return (L(f"{s['prompts']} richieste: apri una sessione per argomento", f"{s['prompts']} prompts: one session per topic"),
-                "Tante richieste diverse nella stessa sessione accumulano contesto inutile.")
+        return (f"{s['prompts']} prompts: one session per topic",
+                "Many different prompts in the same session pile up useless context.")
     if s["peak_ctx"] > 100_000:
-        return (L(f"Contesto a {k(s['peak_ctx'])}: un /compact ora aiuta", f"Context at {k(s['peak_ctx'])}: a /compact now helps"),
-                f"La sessione è a {k(s['peak_ctx'])} di contesto: un /compact la alleggerisce.")
-    return (L("Sessione efficiente, continua così", "Efficient session, keep it up"),
-            "Contesto contenuto e poche chiamate inutili: ottimo uso.")
+        return (f"Context at {k(s['peak_ctx'])}: a /compact now helps",
+                f"The session is at {k(s['peak_ctx'])} of context: a /compact makes it lighter.")
+    return ("Efficient session, keep it up",
+            "Small context and few wasted calls: great usage.")
 
 
 def summary(ss):
@@ -216,12 +210,12 @@ def main():
     if "--json" in sys.argv:
         print(json.dumps(summary(ss), ensure_ascii=False, indent=1))
         return
-    print(f"Sessioni Claude Code negli ultimi {DAYS} giorni: {len(ss)}\n")
+    print(f"Claude Code sessions in the last {DAYS} days: {len(ss)}\n")
     for s in sorted(ss, key=lambda s: -s["weight"])[:10]:
         when = datetime.fromtimestamp(s["end"]).strftime("%a %d %H:%M") if s["end"] else "?"
-        print(f"  {when}  {s['project'][:28]:28}  picco {k(s['peak_ctx']):>5}  "
-              f"{s['calls']:>4} chiamate  {s['prompts']:>3} richieste  peso {k(s['weight'])}")
-    print("\nConsigli:")
+        print(f"  {when}  {s['project'][:28]:28}  peak {k(s['peak_ctx']):>5}  "
+              f"{s['calls']:>4} calls  {s['prompts']:>3} prompts  weight {k(s['weight'])}")
+    print("\nTips:")
     for _, short, long_ in tips(ss):
         print(f"  • {long_}")
 

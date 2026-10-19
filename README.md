@@ -20,13 +20,12 @@ gh auth login          # GitHub CLI
 
 At the end the script prints two URLs. In the **Garmin Connect** app go to **Device → Connect IQ → Reiatsu → Settings** and paste the first one (`usage.txt`). Paste the second one (`widget.txt`) into **Reiatsu Gauge**.
 
-The tips shown on the watch follow your system language (Italian or English). To force one: `CLAUDE_FACE_LANG=en ./install.sh`.
-
 ## What the gist contains
 
 ```
 usage.txt   s,sr,w,wr,t   % 5-hour, 5-hour reset, % weekly, weekly reset, time read
 widget.txt  same line + breakdown (Code/Chat/Cowork), 7-day history,
+            cloud credit ($ used / limit) when your account has one,
             last session title and a tip for it, general tips
 ```
 
