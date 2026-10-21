@@ -271,7 +271,7 @@ class TestPublicApi(CoachBase):
 
     def test_parse_ts_variants(self):
         self.assertEqual(tc.parse_ts("2026-10-21T15:00:11Z"), 1792594811.0)
-        self.assertEqual(tc.parse_ts("2026-10-21T15:00:11.5Z"), 1792594811.0)
+        self.assertEqual(tc.parse_ts("2026-10-21T15:00:11.5Z"), 1792594811.5)
         self.assertAlmostEqual(tc.parse_ts("2026-10-21T15:00:11.123Z"), 1792594811.123, places=3)
         self.assertIsNone(tc.parse_ts("yesterday"))
         self.assertIsNone(tc.parse_ts(None))

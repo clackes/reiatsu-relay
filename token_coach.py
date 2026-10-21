@@ -31,7 +31,7 @@ _FIELDS = ("input_tokens", "cache_read_input_tokens",
 # Testi "user" che non sono prompt scritti dall'utente.
 _NOT_PROMPT = ("<task-notification", "<local-command", "<system-reminder", "<bash-stdout",
                "<bash-stderr", "<user-prompt-submit-hook", "[Request interrupted", "Caveat:")
-_FRACTION = re.compile(r"^(.*T\d\d:\d\d:\d\d)\.\d+(.*)$")
+_FRACTION = re.compile(r"^(.*T\d\d:\d\d:\d\d)\.(\d+)(.*)$")
 
 
 def parse_ts(s):
@@ -42,11 +42,13 @@ def parse_ts(s):
         return datetime.fromisoformat(s).timestamp()
     except ValueError:
         pass
-    # Python 3.9 accetta solo 3 o 6 cifre decimali: le tolgo.
+    # Python 3.9 accetta solo 3 o 6 cifre decimali: le porto a 6, cosi' il risultato
+    # e' lo stesso delle versioni nuove (che accettano qualsiasi numero di cifre).
     m = _FRACTION.match(s)
     if m:
         try:
-            return datetime.fromisoformat(m.group(1) + m.group(2)).timestamp()
+            frac = (m.group(2) + "000000")[:6]
+            return datetime.fromisoformat(m.group(1) + "." + frac + m.group(3)).timestamp()
         except ValueError:
             pass
     return None
