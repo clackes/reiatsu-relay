@@ -1,3 +1,15 @@
 __pycache__/
 *.pyc
 .DS_Store
+# dati locali dell'utente: mai nel repo pubblico
+state.json
+state.json.bad
+state.json.tmp
+coach_cache.json
+coach_cache.json.tmp
+history.jsonl
+.relay.lock
+gist_id
+usage.txt
+widget.txt
+*.log
