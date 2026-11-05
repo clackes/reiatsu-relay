@@ -377,5 +377,25 @@ class Run(unittest.TestCase):
         self.assertEqual(self.go("dry-run"), 1)
 
 
+
+
+class NoLogin(unittest.TestCase):
+    def test_message_names_source_and_keys_not_values(self):
+        creds = {"mcpOAuth": {"secret": "sk-ant-oat01-abc"}}
+        with mock.patch.object(r, "read_creds", return_value=("keychain", creds)):
+            with self.assertRaises(r.RelayError) as cm:
+                r.get_usage()
+        msg = str(cm.exception)
+        self.assertIn("Claude Code-credentials", msg)
+        self.assertIn("mcpOAuth", msg)
+        self.assertNotIn("sk-ant", msg)
+
+    def test_empty_file(self):
+        with mock.patch.object(r, "read_creds", return_value=("file", {})):
+            with self.assertRaises(r.RelayError) as cm:
+                r.get_usage()
+        self.assertIn("keys: none", str(cm.exception))
+
+
 if __name__ == "__main__":
     unittest.main()
