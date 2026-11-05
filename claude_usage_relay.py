@@ -202,12 +202,20 @@ def refresh_token(oauth):
     return oauth
 
 
+def _no_login(source, creds):
+    """Errore leggibile: dove ha cercato e quali chiavi ci sono (solo i nomi, mai i valori)."""
+    where = "keychain '%s'" % KEYCHAIN_SERVICE if source == "keychain" else CRED_FILE
+    keys = ", ".join(sorted(str(k) for k in creds)) if isinstance(creds, dict) and creds else "none"
+    return RelayError("not logged in: %s has no Claude login (keys: %s); run 'claude auth login'"
+                      % (where, keys))
+
+
 def _refreshed(used):
     """Rilegge prima di ruotare: la CLI potrebbe averlo appena fatto lei."""
     source, creds = read_creds()
     oauth = creds.get("claudeAiOauth") if isinstance(creds, dict) else None
     if not isinstance(oauth, dict):
-        raise RelayError("not logged in: run 'claude auth login'")
+        raise _no_login(source, creds)
     if oauth.get("accessToken") and oauth["accessToken"] != used and not _expired(oauth):
         return oauth["accessToken"]
     if not oauth.get("refreshToken"):
@@ -256,7 +264,7 @@ def get_usage():
     source, creds = read_creds()
     oauth = creds.get("claudeAiOauth") if isinstance(creds, dict) else None
     if not isinstance(oauth, dict) or not oauth.get("accessToken"):
-        raise RelayError("not logged in: run 'claude auth login'")
+        raise _no_login(source, creds)
     token = oauth["accessToken"]
     if _expired(oauth):
         token = _refreshed(None)
